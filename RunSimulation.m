@@ -3,33 +3,41 @@ clear
 close all
 
 %% Define constants
-J = 0.0002;               % Motor Inertia
-L = 2.72e-3;              % Winding Self Inductance
-M = -1.5e-3;              % Mutual Inductance
-P = 4;                    % Number of poles
-num_phases = 3;
-Rs = 0.7;                 % Resistance per Phase (ohms)
-turns_per_phase = 100;
-L_r = 0.3;                % Rotor length (m)
-R_r = 0.2;                % Rotor radius (m)
+J  = 0.0002;                % Motor Inertia (kg*m^2)
+L  = 1;                     % Winding Inductance (H)
+R  = 5;                     % Motor Resistance (ohms)
+b  = 0.5;                   % Damping constant (N*s)
+Kt = 1.0;                   % Motor Torque constant (N*m/A)
+Ke = 1.0;                   % Back EMF constant (V*s/rad)
 
-% NOT FILLED OUT WITH CORRECT NUMBERS YET
-lambda_p = 1;
-B = 1;
+tf = 30.0;                  % Simulation duration (s)
 
-%% Derived Terms
-L1 = L - M;
 
-%% State space model
-% Non-dynamic portion of the A matrix
-A_base = ...
-[-Rs/L1   0     0     0     0;
-    0  -Rs/L1   0     0     0;
-    0     0  -Rs/L1   0     0;
-    0     0     0   -B/J    0;
-    0     0     0    P/2    0];
+%% Define Controller Parameters
 
-B = ...
-[1/L1  0    0   ;
-  0   1/L1  0   ;
-  0    0   1/L1];
+% PID parameters
+P = 1;                   % Proportional Gain
+I = 4;                      % Integral Gain
+D = 0;                      % Derivative Gain
+
+% Discretization (Not yet implemented)
+Ts = 0.10;                  % Sample Time (s)
+
+%% Run the simulation
+results = sim('BrushlessMotorControlSim.slx');
+
+%% Plot the results
+
+[Tw, Yw] = getSimTimeSeries(results, 'omega');
+plot(Tw, Yw)
+
+
+%% Helper Functions
+
+function [t, signal] = getSimTimeSeries(sim_output, name)
+
+    time_series = sim_output.yout.getElement(name);
+    t      = time_series.Values.Time;
+    signal = time_series.Values.Data;
+
+end
