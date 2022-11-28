@@ -7,7 +7,7 @@ D_mat = zeros(size(C, 1), size(B, 2));
 [num, den] = ss2tf(A, B, C, D_mat, 1);
 open_loop_tf_c = tf(num, den);
 figure()
-pzplot(open_loop_tf_c)
+rlocus(open_loop_tf_c)
 
 % Get the continuous closed loop transfer function for the LQR controller
 [num, den] = ss2tf(A-B(:,1)*K_lqr, B, C, D_mat, 1);
@@ -17,8 +17,12 @@ closed_loop_tf_c_lqr = tf(num, den);
 figure()
 subplot(1,2,1)
 bode(open_loop_tf_c)
+title("Open Loop")
+grid on
 subplot(1,2,2)
 bode(closed_loop_tf_c_lqr)
+title("Closed Loop")
+grid on
 
 % Get the  loop transfer function
 open_loop_tf_d = c2d(open_loop_tf_c, Ts, 'tustin');

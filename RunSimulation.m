@@ -2,6 +2,7 @@ clc
 clear
 close all
 %#ok<*UNRCH>
+%#ok<*SAGROW>
 
 %% Define constants
 % Datasheet: https://catalogue.precisionmicrodrives.com/product/datasheet/124-802-001-24mm-dc-motor-31mm-type-datasheet.pdf
@@ -16,7 +17,6 @@ V_max = 24;                 % Rated voltage (V)
 Tf = 30.0;                  % Simulation duration (s)
 
 % Discretization
-Ts = 0.1;                   % Sample Time (s)
 continuous = false;         % Whether or not to discretize the sim
 
 % Note that the PID block has to be manually toggled between continuous and
@@ -36,7 +36,7 @@ B = ...
 
 % Determine which state we are trying to control
 C = [0 0 0];
-C(2) = 1;
+C(1) = 1;
 
 %% Define Controller Parameters
 
@@ -58,6 +58,8 @@ R_lqr = 0.001;
 
 K_integral = 10;
 
+%% Disturbance modeling
+
 % Whether or not to include a disturbance step input in the simulation
 add_disturbance = true;         % Whether or not to add a diturbance
 disturbance_time = 10;          % Time at which to apply disturbance (s)
@@ -67,7 +69,7 @@ disturbance_amplitude = 0.02;   % Size of disturbance (Nm)
 %% Create a reference input angular velocity to target
 
 % Can be "custom", "constant_val" or "constant_acc"
-input_type = uint8(InputType.custom);
+input_type = uint8(InputType.constant_val);
 
 % Constant input signal
 velocity_reference = 100;       % rad/s
@@ -84,33 +86,20 @@ simin.signals.values = constant_reference*sin(0.5*simin.time);
 target_alpha = 5;               % rad/s^2
 max_omega    = 100;             % rad/s
 
-%% Calculate the LQR gain
-if ~C(1)
-    % If we're not doing position control, make position have almost no weight
-    Q_lqr(1,1) = 1e-5;
-end
-
-if continuous
-    K_lqr = lqr(A, B(:,1), Q_lqr, R_lqr);
-else
-    ss_d = c2d(ss(A, B(:,1), C, 0), Ts, 'zoh');
-    K_lqr = dlqr(ss_d.A, ss_d.B, Q_lqr, R_lqr);
-end
-
-if ~C(1)
-    K_lqr(1) = 0;
-end
-
 %% Plot the results
 global results
 f1 = figure();
-Ts_vec = [0.2, 0.1, 0.01, 0.001];
-legend_cell = cell(1, numel(Ts_vec));
+Ts_vec = [0.2, 0.1, 0.01];
 
 for i = 1:numel(Ts_vec)
     
-    % Run the simulation
+    % Get the sample time
     Ts = Ts_vec(i);
+    
+    % Calculate the LQR gain
+    K_lqr = getLQRGain(A, B, C, Q_lqr, R_lqr, Ts, continuous);
+    
+    % Run the simulation
     results = sim('BrushlessMotorControlSim.slx');
 
     % Plot the motor speed
@@ -122,8 +111,7 @@ for i = 1:numel(Ts_vec)
     xlabel("Time (s)")
     if C(1)
         [T, Y] = getSimTimeSeries('theta');
-        Y = mod(Y + pi, 2*pi) - pi;
-        Y = Y + 2*pi * (Y < -pi);
+        Y = mod(Y, 2*pi);
         ylabel("Motor Position (rad)")
         title("Motor Position Control")
     elseif C(2)
@@ -160,12 +148,13 @@ for i = 1:numel(Ts_vec)
     ax.YLabel.Rotation = 0;
     title("Motor Current")
     grid on
-    
-    legend_cell{i} = ['Ts = ' num2str(Ts)];
 
     % We only need to do this once if we're in the continuous version
     if continuous
+        legend_cell = {'Continuous Response'};
         break
+    else
+        legend_cell{i} = ['Ts = ' num2str(Ts)];
     end
 end
 
@@ -188,7 +177,7 @@ f1;
 subplot(2,3,1:3)
 plot(T_setpoint, Y_setpoint)
 f1.WindowState = 'Maximized';
-legend_cell = [legend_cell "Setpoint"];
+legend_cell = [legend_cell 'Setpoint'];
 legend(legend_cell)
 
 %% Helper Functions
@@ -201,4 +190,23 @@ function [t, signal] = getSimTimeSeries(name)
     t      = time_series.Values.Time;
     signal = time_series.Values.Data;
 
+end
+
+function K = getLQRGain(A, B, C, Q, R, Ts, continuous)
+    if ~C(1)
+        % If we're not doing position control, make position have almost no weight
+        Q(1,1) = 1e-5;
+    end
+
+    if continuous
+        K = lqr(A, B(:,1), Q, R);
+    else
+        ss_d = c2d(ss(A, B(:,1), C, 0), Ts, 'zoh');
+        K = dlqr(ss_d.A, ss_d.B, Q, R);
+    end
+
+    if ~C(1)
+        % If we're not doing position control, remove portion relative to position 
+        K(1) = 0;
+    end
 end
